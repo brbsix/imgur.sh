@@ -14,6 +14,14 @@ error(){
     echo "ERROR: $*" >&2
 }
 
+# Upload image
+upload(){
+    # The "Expect: " header is to get around a problem when using this through
+    # the Squid proxy. Not sure if it's a Squid bug or what.
+    curl -sSvF "key=$APIKEY" -H 'Expect: ' -F "image=@$1" \
+        http://imgur.com/api/upload.xml
+}
+
 # Output usage instructions
 usage(){
     cat >&2 <<-EOF
@@ -46,43 +54,51 @@ hash curl &>/dev/null || {
     exit 1
 }
 
+# Empty out the vars
 clip=
-errors=false
+errors=0
 
 # Loop through arguments
-while (( $# > 0 )); do
-    file="$1"
-    shift
+for file in "$@"; do
 
-    # Check file exists
+    # Ensure file exists
     if [[ ! -f $file ]]; then
-        error "File '$file' doesn't exist, skipping"
-        errors=true
+        error "File '$file' doesn't exist, skipping..."
+        ((++errors))
+        continue
+    # Ensure file is readable
+    elif [[ ! -r $file ]]; then
+        error "File '$file' is not readable, skipping..."
+        ((++errors))
         continue
     fi
 
     # Upload the image
-    response=$(curl -vF "key=$APIKEY" -H 'Expect: ' -F "image=@$file" \
-               http://imgur.com/api/upload.xml 2>/dev/null)
+    # Capture stderr, stdout and the return code in their respective variables
+    eval "$({ stderr=$({ stdout=$(upload "$file"); returncode=$?; } 2>&1; declare -p stdout returncode >&2); declare -p stderr; } 2>&1)"
 
-    # The "Expect: " header is to get around a problem when using this through
-    # the Squid proxy. Not sure if it's a Squid bug or what.
-    if (( $? != 0 )); then
+    # Check whether the command exited with a non-zero
+    # exit code or empty stdout
+    if (( returncode != 0 )) || [[ -z $stdout ]]; then
         error 'Upload failed'
-        errors=true
+        [[ -z $stderr ]] || {
+            echo 'Error message from curl:' >&2
+            echo "$stderr" >&2
+        }
+        ((++errors))
         continue
-    elif grep -q '<error_msg>' <<<"$response"; then
+    elif grep -q '<error_msg>' <<<"$stdout"; then
         echo 'Error message from imgur:' >&2
-        msg="${response##*<error_msg>}"
+        msg="${stdout##*<error_msg>}"
         echo "${msg%%</error_msg>*}" >&2
-        errors=true
+        ((++errors))
         continue
     fi
 
     # Parse the response and output our stuff
-    url="${response##*<original_image>}"
+    url="${stdout##*<original_image>}"
     url="${url%%</original_image>*}"
-    deleteurl="${response##*<delete_page>}"
+    deleteurl="${stdout##*<delete_page>}"
     deleteurl="${deleteurl%%</delete_page>*}"
     echo "$url"
     echo "Delete page: $deleteurl" >&2
@@ -92,6 +108,7 @@ while (( $# > 0 )); do
     if (( $# > 0 )); then
         clip+=$'\n'
     fi
+
 done
 
 # Put the URLs on the clipboard if we have xsel or xclip
@@ -109,6 +126,5 @@ else
     error "Haven't copied to the clipboard: no \$DISPLAY"
 fi
 
-if "$errors"; then
-    exit 1
-fi
+# exit with the correct exit code
+(( errors == 0 ))
