@@ -7,65 +7,72 @@
 # The latest version can be found at https://github.com/tremby/imgur.sh
 
 # API Key provided by Alan@imgur.com
-apikey="b3625162d3418ac51a9ee805b1840452"
+APIKEY='b3625162d3418ac51a9ee805b1840452'
 
-# Function to output usage instructions
-function usage {
-    echo "Usage: $(basename $0) <filename> [<filename> [...]]" >&2
-    echo "Upload images to imgur and output their new URLs to stdout. Each one's" >&2
-    echo "delete page is output to stderr between the view URLs." >&2
-    echo "If xsel, xclip, or pbcopy is available, the URLs are put on the X selection for" >&2
-    echo "easy pasting." >&2
+# Output error message to stderr
+error(){
+    echo "ERROR: $*" >&2
+}
+
+# Output usage instructions
+usage(){
+    cat >&2 <<-EOF
+	Usage: ${0##*/} <filename> [<filename> [...]]
+	Upload images to imgur and output their new URLs to stdout.
+	Each one's delete page is output to stderr between the view URLs.
+	If xsel, xclip, or pbcopy is available, the URLs are put on
+	the X selection for easy pasting.
+	EOF
 }
 
 # Check API key has been entered
-if [ -z "$apikey" ]; then
-    echo "You first need to edit the script and put your API key in the variable near the top." >&2
+if [[ -z $APIKEY ]]; then
+    error 'No API key'
     exit 15
 fi
 
 # Check arguments
-if [ "$1" == "-h" -o "$1" == "--help" ]; then
+if (( $# == 0 )); then
+    error 'No file specified'
+    exit 1
+elif [[ $# -eq 1 && $1 =~ ^(-h|--help)$ ]]; then
     usage
     exit 0
-elif [ $# -eq 0 ]; then
-    echo "No file specified" >&2
-    usage
-    exit 16
 fi
 
 # Check curl is available
 hash curl &>/dev/null || {
-    echo "Couldn't find curl, which is required." >&2
-    exit 17
+    error "Couldn't find curl, which is required"
+    exit 1
 }
 
-clip=""
+clip=
 errors=false
 
 # Loop through arguments
-while [ $# -gt 0 ]; do
+while (( $# > 0 )); do
     file="$1"
     shift
 
     # Check file exists
-    if [ ! -f "$file" ]; then
-        echo "File '$file' doesn't exist, skipping" >&2
+    if [[ ! -f $file ]]; then
+        error "File '$file' doesn't exist, skipping"
         errors=true
         continue
     fi
 
     # Upload the image
-    response=$(curl -vF "key=$apikey" -H "Expect: " -F "image=@$file" \
-        http://imgur.com/api/upload.xml 2>/dev/null)
+    response=$(curl -vF "key=$APIKEY" -H 'Expect: ' -F "image=@$file" \
+               http://imgur.com/api/upload.xml 2>/dev/null)
+
     # The "Expect: " header is to get around a problem when using this through
     # the Squid proxy. Not sure if it's a Squid bug or what.
-    if [ $? -ne 0 ]; then
-        echo "Upload failed" >&2
+    if (( $? != 0 )); then
+        error 'Upload failed'
         errors=true
         continue
-    elif echo "$response" | grep -q "<error_msg>"; then
-        echo "Error message from imgur:" >&2
+    elif grep -q '<error_msg>' <<<"$response"; then
+        echo 'Error message from imgur:' >&2
         msg="${response##*<error_msg>}"
         echo "${msg%%</error_msg>*}" >&2
         errors=true
@@ -77,18 +84,18 @@ while [ $# -gt 0 ]; do
     url="${url%%</original_image>*}"
     deleteurl="${response##*<delete_page>}"
     deleteurl="${deleteurl%%</delete_page>*}"
-    echo $url
+    echo "$url"
     echo "Delete page: $deleteurl" >&2
 
     # Append the URL to a string so we can put them all on the clipboard later
     clip+="$url"
-    if [ $# -gt 0 ]; then
+    if (( $# > 0 )); then
         clip+=$'\n'
     fi
 done
 
 # Put the URLs on the clipboard if we have xsel or xclip
-if [ $DISPLAY ]; then
+if [[ -n $DISPLAY ]]; then
     if hash xsel &>/dev/null; then
         echo -n "$clip" | xsel
     elif hash xclip &>/dev/null; then
@@ -96,12 +103,12 @@ if [ $DISPLAY ]; then
     elif hash pbcopy &>/dev/null; then
         echo -n "$clip" | pbcopy
     else
-        echo "Haven't copied to the clipboard: no xsel, xclip, or pbcopy" >&2
+        error "Haven't copied to the clipboard: no xsel, xclip, or pbcopy"
     fi
 else
-    echo "Haven't copied to the clipboard: no \$DISPLAY" >&2
+    error "Haven't copied to the clipboard: no \$DISPLAY"
 fi
 
-if $errors; then
+if "$errors"; then
     exit 1
 fi
