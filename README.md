@@ -3,6 +3,7 @@ Bart's Imgur uploader bash script
 
 - By Bart Nagel <bart@tremby.net>
 - Improvements by Tino Sino <robottinosino@gmail.com>
+- Improvements by Brian Beffa <brbsix@gmail.com>
 
 Purpose
 -------

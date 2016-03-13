@@ -2,9 +2,10 @@
 
 # Imgur script by Bart Nagel <bart@tremby.net>
 # Improvements by Tino Sino <robottinosino@gmail.com>
+# Improvements by Brian Beffa <brbsix@gmail.com>
 # Version 6 or more
 # I release this into the public domain. Do with it what you will.
-# The latest version can be found at https://github.com/tremby/imgur.sh
+# The latest version can be found at https://github.com/brbsix/imgur.sh
 
 # API Key provided by Alan@imgur.com
 APIKEY='b3625162d3418ac51a9ee805b1840452'
