@@ -35,7 +35,7 @@ elif [ $# -eq 0 ]; then
 fi
 
 # Check curl is available
-type curl &>/dev/null || {
+hash curl &>/dev/null || {
     echo "Couldn't find curl, which is required." >&2
     exit 17
 }
@@ -89,11 +89,11 @@ done
 
 # Put the URLs on the clipboard if we have xsel or xclip
 if [ $DISPLAY ]; then
-    if type xsel &>/dev/null; then
+    if hash xsel &>/dev/null; then
         echo -n "$clip" | xsel
-    elif type xclip &>/dev/null; then
+    elif hash xclip &>/dev/null; then
         echo -n "$clip" | xclip
-    elif type pbcopy &>/dev/null; then
+    elif hash pbcopy &>/dev/null; then
         echo -n "$clip" | pbcopy
     else
         echo "Haven't copied to the clipboard: no xsel, xclip, or pbcopy" >&2
